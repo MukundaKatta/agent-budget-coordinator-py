@@ -42,7 +42,9 @@ class TokenBudget(Budget):
 
     max_tokens: int
     _used: int = field(default=0, init=False, repr=False)
-    _lock: threading.Lock = field(default_factory=threading.Lock, init=False, repr=False)
+    _lock: threading.Lock = field(
+        default_factory=threading.Lock, init=False, repr=False
+    )
 
     def check(self, estimated_tokens: int = 0, **_: Any) -> None:
         with self._lock:
@@ -75,7 +77,9 @@ class CostBudget(Budget):
 
     max_usd: float
     _spent: float = field(default=0.0, init=False, repr=False)
-    _lock: threading.Lock = field(default_factory=threading.Lock, init=False, repr=False)
+    _lock: threading.Lock = field(
+        default_factory=threading.Lock, init=False, repr=False
+    )
 
     def check(self, estimated_cost: float = 0.0, **_: Any) -> None:
         with self._lock:
@@ -108,7 +112,9 @@ class CallCountBudget(Budget):
 
     max_calls: int
     _count: int = field(default=0, init=False, repr=False)
-    _lock: threading.Lock = field(default_factory=threading.Lock, init=False, repr=False)
+    _lock: threading.Lock = field(
+        default_factory=threading.Lock, init=False, repr=False
+    )
 
     def check(self, **_: Any) -> None:
         with self._lock:
@@ -210,13 +216,17 @@ class BudgetCoordinator:
         for budget in self._budgets:
             budget.reset()
 
-    def wrap(self, estimate_fn: Callable | None = None, record_fn: Callable | None = None):
+    def wrap(
+        self, estimate_fn: Callable | None = None, record_fn: Callable | None = None
+    ):
         """
         Decorator that checks budgets before and records after each call.
 
         Args:
-            estimate_fn: Called with (messages) → dict of estimated costs.
-            record_fn: Called with (messages, result) → dict of actual costs.
+            estimate_fn: Called with the wrapped call's (*args, **kwargs) →
+                dict of estimated costs passed to ``check``.
+            record_fn: Called with (*args, result, **kwargs) → dict of actual
+                costs passed to ``record``.
         """
         import functools
 
@@ -226,10 +236,12 @@ class BudgetCoordinator:
                 estimates = estimate_fn(*args, **kwargs) if estimate_fn else {}
                 self.check(**estimates)
                 result = fn(*args, **kwargs)
-                actuals = record_fn(*args, result) if record_fn else {}
+                actuals = record_fn(*args, result, **kwargs) if record_fn else {}
                 self.record(**actuals)
                 return result
+
             return wrapper
+
         return decorator
 
     def summary(self) -> dict:
@@ -238,17 +250,37 @@ class BudgetCoordinator:
         for budget in self._budgets:
             info: dict[str, Any] = {"name": budget.name}
             if isinstance(budget, TokenBudget):
-                info.update({"used": budget.used, "max": budget.max_tokens,
-                              "remaining": budget.remaining})
+                info.update(
+                    {
+                        "used": budget.used,
+                        "max": budget.max_tokens,
+                        "remaining": budget.remaining,
+                    }
+                )
             elif isinstance(budget, CostBudget):
-                info.update({"spent": budget.spent, "max_usd": budget.max_usd,
-                              "remaining_usd": budget.remaining_usd})
+                info.update(
+                    {
+                        "spent": budget.spent,
+                        "max_usd": budget.max_usd,
+                        "remaining_usd": budget.remaining_usd,
+                    }
+                )
             elif isinstance(budget, CallCountBudget):
-                info.update({"count": budget.count, "max": budget.max_calls,
-                              "remaining": budget.remaining})
+                info.update(
+                    {
+                        "count": budget.count,
+                        "max": budget.max_calls,
+                        "remaining": budget.remaining,
+                    }
+                )
             elif isinstance(budget, TimeBudget):
-                info.update({"elapsed": budget.elapsed,
-                              "remaining_seconds": budget.remaining_seconds})
+                info.update(
+                    {
+                        "elapsed": budget.elapsed,
+                        "max_seconds": budget.max_seconds,
+                        "remaining_seconds": budget.remaining_seconds,
+                    }
+                )
             out[budget.name] = info
         return out
 
