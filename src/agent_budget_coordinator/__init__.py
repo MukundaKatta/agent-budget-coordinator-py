@@ -210,13 +210,30 @@ class BudgetCoordinator:
         for budget in self._budgets:
             budget.reset()
 
-    def wrap(self, estimate_fn: Callable | None = None, record_fn: Callable | None = None):
+    def wrap(
+        self,
+        estimate_fn: Callable[..., dict] | None = None,
+        record_fn: Callable[..., dict] | None = None,
+    ) -> Callable[[Callable], Callable]:
         """
-        Decorator that checks budgets before and records after each call.
+        Decorator that checks budgets before a call and records consumption after.
+
+        ``estimate_fn`` is invoked with the wrapped function's own arguments and
+        should return a dict of ``check`` keyword arguments (e.g.
+        ``{"estimated_tokens": 500}``). ``record_fn`` is invoked with the same
+        arguments plus the keyword ``result`` holding the return value, and should
+        return a dict of ``record`` keyword arguments (e.g. ``{"tokens_used": 480}``).
+
+        Both ``estimate_fn`` and ``record_fn`` receive the original positional and
+        keyword arguments exactly as the wrapped function was called, so they work
+        whether arguments are passed positionally or by keyword.
 
         Args:
-            estimate_fn: Called with (messages) → dict of estimated costs.
-            record_fn: Called with (messages, result) → dict of actual costs.
+            estimate_fn: Called as ``estimate_fn(*args, **kwargs)`` → dict for ``check``.
+            record_fn: Called as ``record_fn(*args, result=result, **kwargs)`` → dict for ``record``.
+
+        Returns:
+            A decorator that wraps the target callable.
         """
         import functools
 
@@ -226,10 +243,14 @@ class BudgetCoordinator:
                 estimates = estimate_fn(*args, **kwargs) if estimate_fn else {}
                 self.check(**estimates)
                 result = fn(*args, **kwargs)
-                actuals = record_fn(*args, result) if record_fn else {}
+                actuals = (
+                    record_fn(*args, result=result, **kwargs) if record_fn else {}
+                )
                 self.record(**actuals)
                 return result
+
             return wrapper
+
         return decorator
 
     def summary(self) -> dict:
@@ -248,6 +269,7 @@ class BudgetCoordinator:
                               "remaining": budget.remaining})
             elif isinstance(budget, TimeBudget):
                 info.update({"elapsed": budget.elapsed,
+                              "max_seconds": budget.max_seconds,
                               "remaining_seconds": budget.remaining_seconds})
             out[budget.name] = info
         return out

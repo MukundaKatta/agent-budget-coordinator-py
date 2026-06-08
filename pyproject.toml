@@ -21,3 +21,6 @@ Homepage = "https://github.com/MukundaKatta/agent-budget-coordinator-py"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+agent_budget_coordinator = ["py.typed"]
